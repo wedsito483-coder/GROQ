@@ -1,0 +1,64 @@
+name: Crear ZIP con la APK
+on:
+  push:
+    tags-ignore: ['**']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Usar el ZIP más reciente y encontrar el proyecto
+        run: |
+          best=""; bt=0
+          for z in *.zip; do
+            [ -f "$z" ] || continue
+            t=$(git log -1 --format=%ct -- "$z")
+            if [ "$t" -gt "$bt" ]; then bt=$t; best="$z"; fi
+          done
+          [ -n "$best" ] || { echo "No hay ningún .zip en el repositorio"; exit 1; }
+          echo "Usando: $best"
+          mkdir proyecto
+          unzip -q "$best" -d proyecto
+          # busca la carpeta que tiene settings.gradle (sin importar cómo se llame)
+          s=$(find proyecto -maxdepth 3 \( -name settings.gradle -o -name settings.gradle.kts \) | head -n 1)
+          [ -n "$s" ] || { echo "No encontré settings.gradle dentro del ZIP"; exit 1; }
+          dir=$(dirname "$s")
+          name=$(basename "$dir"); [ "$name" = "proyecto" ] && name="App"
+          echo "ZIP_USADO=$best" >> "$GITHUB_ENV"
+          echo "PROYECTO_DIR=$dir" >> "$GITHUB_ENV"
+          echo "APP_NOMBRE=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Compilar la APK
+        run: gradle assembleDebug
+        working-directory: ${{ env.PROYECTO_DIR }}
+
+      - name: Meter la APK en un ZIP
+        run: |
+          apk=$(find "$PROYECTO_DIR" -path "*outputs/apk/debug/*.apk" | head -n 1)
+          [ -n "$apk" ] || { echo "No se generó la APK"; exit 1; }
+          mkdir salida
+          cp "$apk" "salida/$APP_NOMBRE.apk"
+          (cd salida && zip "../$APP_NOMBRE-APK.zip" "$APP_NOMBRE.apk")
+
+      - name: Publicar el ZIP para descargarlo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "apk-${{ github.run_number }}" "$APP_NOMBRE-APK.zip" \
+            --title "APK #${{ github.run_number }} ($APP_NOMBRE)" \
+            --notes "ZIP con la APK, generado desde $ZIP_USADO"

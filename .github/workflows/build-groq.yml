@@ -17,8 +17,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Preparar Android SDK
-        uses: android-actions/setup-android@v3
+      # GitHub-hosted Ubuntu runners ya incluyen Android SDK.
+      # Evitamos setup-android porque está fallando al detectar cmdline-tools 20.0.
 
       - name: Preparar Gradle
         uses: gradle/actions/setup-gradle@v4

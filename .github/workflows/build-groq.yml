@@ -1,0 +1,41 @@
+name: Build GROQ WHATSAPP AI
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Preparar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Extraer el proyecto ZIP
+        run: |
+          unzip -o GROQ_WHATSAPP_AI_GitHub.zip -d extracted
+          test -f extracted/GROQ_WHATSAPP_AI/settings.gradle.kts
+
+      - name: Compilar APK
+        working-directory: extracted/GROQ_WHATSAPP_AI
+        run: gradle assembleDebug
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GROQ-WHATSAPP-AI-debug
+          path: extracted/GROQ_WHATSAPP_AI/app/build/outputs/apk/debug/app-debug.apk
